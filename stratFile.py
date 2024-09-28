@@ -79,7 +79,13 @@ def ofdm_simulate(codeword, channelResponse,SNRdb):
 
     OFDM_TX = OFDM_withCP
 
+    print("***************************************")
+
+    print(OFDM_TX.shape)
+
     OFDM_RX = channel(OFDM_TX, channelResponse, SNRdb)
+
+    print(OFDM_RX.shape)
 
     print(OFDM_RX)
 

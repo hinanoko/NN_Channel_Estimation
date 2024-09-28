@@ -5,6 +5,7 @@ import tensorflow as tf
 tf.compat.v1.disable_eager_execution()
 import math
 import os
+import random
 
 carrier = 64
 num_symbol = 50
@@ -112,5 +113,73 @@ add_cyclic_signal = np.vstack((cyclic_prefix, time_signal))
 print("\n带有循环前缀的时域信号 (Time Domain Signal with Cyclic Prefix):\n", add_cyclic_signal)
 
 print("带有循环前缀的时域信号的形状:", add_cyclic_signal.shape)
-# 输出应该是 (72, 50)
+# 输出应该是 (72, 57)
+
+# 计算总的数目
+num_data = add_cyclic_signal.shape[1]  # 57
+
+# 进行 reshape 操作
+Tx_data_trans = np.reshape(add_cyclic_signal, (1, (carrier + CP) * num_data))
+
+# 打印最终的形状
+print("展平后的数据形状:", Tx_data_trans.shape)
+
+H_folder_train = 'H_dataset_fewer/'
+channel_response_set_train = []
+train_idx_low = 1
+train_idx_high = 21
+for train_idx in range(train_idx_low, train_idx_high):
+    print("Processing the ", train_idx, "th document")
+    H_file = H_folder_train + str(train_idx) + '.txt'
+    with open(H_file) as f:
+        for line in f:
+            numbers_str = line.split()
+            numbers_float = [float(x) for x in numbers_str]
+            h_response = np.asarray(numbers_float[0:int(len(numbers_float) / 2)]) + 1j * np.asarray(
+                numbers_float[int(len(numbers_float) / 2):len(numbers_float)])
+            channel_response_set_train.append(h_response)
+
+# 随机选择60个信道响应
+selected_channels = random.sample(channel_response_set_train, 60)
+
+# 创建一个长度为960的冲激响应序列
+long_impulse_response = np.concatenate(selected_channels)
+
+# 验证长度
+print(f"Length of the long impulse response: {len(long_impulse_response)}")
+
+Tx_data_trans = Tx_data_trans.flatten()  # 或者 Tx_data_trans.reshape(-1)
+
+print(Tx_data_trans.shape)
+print(long_impulse_response.shape)
+
+convolved = np.convolve(Tx_data_trans, long_impulse_response)
+signal_power = np.mean(abs(convolved**2))
+sigma2 = signal_power * 10**(-SNRdb/10)
+noise = np.sqrt(sigma2/2) * (np.random.randn(*convolved.shape)+1j*np.random.randn(*convolved.shape))
+
+OFDM_RX = convolved + noise
+
+print(OFDM_RX.shape)
+
+# Step 1: 丢弃卷积后信号的前 959 个样本
+effective_OFDM_RX = OFDM_RX[959:]  # 丢弃前 959 个卷积引入的多余部分
+
+# Step 2: 计算新的符号数量和每个符号的总长度
+total_symbol_length = carrier + CP  # 每个符号的长度为 72
+num_ofdm_symbols = len(effective_OFDM_RX) // total_symbol_length  # 计算符号数量
+
+# Step 3: 初始化去除循环前缀后的矩阵
+OFDM_RX_no_prefix = np.zeros((carrier, num_ofdm_symbols), dtype=complex)  # 64 x 57
+
+# Step 4: 去除循环前缀并提取有效数据部分
+for i in range(num_ofdm_symbols):
+    start = i * total_symbol_length + CP  # 跳过每个符号的前 8 个循环前缀
+    end = (i + 1) * total_symbol_length  # 每个符号的结束位置
+    OFDM_RX_no_prefix[:, i] = effective_OFDM_RX[start:end]  # 提取每个符号的有效数据部分
+
+# Step 5: 打印去掉循环前缀后的 OFDM 矩阵
+print("\n去除循环前缀后的 OFDM 矩阵:\n", OFDM_RX_no_prefix)
+print("去除循环前缀后的 OFDM 矩阵的形状:", OFDM_RX_no_prefix.shape)  # 应该是 (64, 57)
+
 
