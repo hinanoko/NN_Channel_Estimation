@@ -7,6 +7,7 @@ import math
 import os
 
 carrier = 64
+num_symbol = 50
 CP = carrier//4
 Pilot = 8
 bitNum = 2
